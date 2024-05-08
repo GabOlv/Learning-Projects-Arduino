@@ -82,10 +82,37 @@ void turnOffAllLeds() {
     digitalWrite(ledPins[i], LOW);
   }
 }
-
+/*
 void selectRandomLedToBlink() {
   int randomIndex = random(numButtons); // Generate a random index
   digitalWrite(ledPins[randomIndex], HIGH); // Turn on the randomly selected LED
   delay(1000); // Wait for 1 second
   digitalWrite(ledPins[randomIndex], LOW); // Turn off the LED
+}
+*/
+
+void selectRandomLedToBlink() {
+  int randomIndices[4]; // Array to store three random indices
+  int numSelected = 0; // Counter for how many LEDs are selected
+  while (numSelected < 4) {
+    int randomIndex = random(numButtons); // Generate a random index
+    bool alreadySelected = false;
+    for (int i = 0; i < numSelected; i++) {
+      if (randomIndices[i] == randomIndex) {
+        alreadySelected = true;
+        break;
+      }
+    }
+    if (!alreadySelected) {
+      randomIndices[numSelected++] = randomIndex;
+    }
+  }
+
+  // Blink the selected LEDs
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(ledPins[randomIndices[i]], HIGH); // Turn on the randomly selected LED
+    delay(500); // Wait for 0.5 seconds
+    digitalWrite(ledPins[randomIndices[i]], LOW); // Turn off the LED
+    delay(500); // Wait for 0.5 seconds before blinking the next LED
+  }
 }
