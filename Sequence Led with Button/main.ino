@@ -2,16 +2,17 @@
     Initialize the lists with the pins and buttons positions
     And get the number of buttons
 */
+
 const int ledPins[] = {4, 6, 8, 10};
 const int buttonPins[] = {5, 7, 9, 11};
 const int startButtonPin = 12;
 const int numButtons = sizeof(buttonPins) / sizeof(buttonPins[0]);
 
 // Global variable to store the order of LED blinking
-int orderLedBlink[4]; // Array to store the order of LED blinking
+int orderLedBlink[4];
 
 // Global variable to store the order of next 4 buttons pressed
-int nextButtonOrder[4]; // Array to store the order of the next 4 buttons pressed
+int nextButtonOrder[4];
 
 // Flag to indicate whether to count the next four button presses after button 12
 bool countingButtons = false;
@@ -37,9 +38,10 @@ void setup() {
 }
 
 /*
-    Main loop will verify if the button is pressed or not.
-    If the button is pressed, the index of the button will be given as an attribute to the function activateLed
-    and the delay will be applied to prevent debouncing.
+    In Main loop:
+    - Read the state of the button
+    - If the button is pressed, activate the LED else turn off the LED
+    - Call the function to store the order of the next 4 buttons pressed after pressing the start button
 */
 
 void loop() {
@@ -48,14 +50,14 @@ void loop() {
             activateLed(i);
             delay(100);
           
-            // Store the order of the next 4 buttons pressed after pressing the start button
+            // Call the function to store the order of the next 4 buttons pressed after pressing the start button
             if (countingButtons) {
                 storeNextButtonOrder(buttonPins[i]);
             }
         }
     }
 
-    // Check if the select button is pressed
+    // Check if the select button (12) is pressed
     if (digitalRead(startButtonPin) == HIGH) {
         selectRandomLedToBlink();
         countingButtons = true; // Start counting buttons after LED blinking
@@ -63,8 +65,8 @@ void loop() {
 }
 
 /*
-    Activate the LEDs based on the button and LED index
-    If the indices are not the same (LedPins[i] != buttonIndex), the LED will be turned off.
+    In activateLed function:
+    - Turn on the LED if the index is equal to the button index declared in the buttonPins list.
 */
 
 void activateLed(int buttonIndex) {
@@ -74,7 +76,8 @@ void activateLed(int buttonIndex) {
 }
 
 /*
-    Sequentially turn on and off the LEDs
+    In sequentialLeds function:
+    - Turn on all LEDs repeatedly for 3 seconds then turn them off after some seconds.
 */
 
 void sequentialLeds() {
@@ -87,14 +90,14 @@ void sequentialLeds() {
         }
     }
 
-    // Turn on all LEDs for 3 seconds
     turnOnAllLeds();
     delay(1000);
-    turnOffAllLeds(); // Turn off all LEDs
+    turnOffAllLeds();
 }
 
 /*
-    Turn On all LEDs
+    In turnOnAllLeds function:
+    - Turn on all LEDs to High state.
 */
 void turnOnAllLeds() {
     for (int i = 0; i < numButtons; i++) {
@@ -103,8 +106,10 @@ void turnOnAllLeds() {
 }
 
 /*
-    Turn off all LEDs
+    In turnOffAllLeds function:
+    - Turn off all LEDs to Low state.
 */
+
 void turnOffAllLeds() {
     for (int i = 0; i < numButtons; i++) {
         digitalWrite(ledPins[i], LOW);
@@ -112,27 +117,31 @@ void turnOffAllLeds() {
 }
 
 /*
-    Select random LEDs to blink and store their order
-    each LED will blink for 0.5 seconds and will not repeat
+    In selectRandomLedToBlink function:
+    - Blink the selected random LEDs based on the order of the LEDs declared in the ledPins list.
+    - Start counting buttons pins after the random LED blinking enabling the flag countingButtons.
 */
+
 void selectRandomLedToBlink() {
     turnOffAllLeds();
-    delay(1000);
+    delay(800);
 
-    int randomIndices[4]; // Array to store three random indices
-    int numSelected = 0; // Counter for how many LEDs are selected
+    // Array to store random indices and count the number of selected LEDs.
+    int randomIndices[4]; 
+    int numSelected = 0; 
 
     while (numSelected < 4) {
-        int randomIndex = random(numButtons); // Generate a random index
+        int randomIndex = random(numButtons); // Generate a random index between 0 and numButtons.
         bool alreadySelected = false;
         for (int i = 0; i < numSelected; i++) {
             if (randomIndices[i] == randomIndex) {
-                alreadySelected = true;
+                alreadySelected = true; // Prevent repeatedly selecting the same index.
                 break;
             }
         }
+
         if (!alreadySelected) {
-            randomIndices[numSelected] = randomIndex;
+            randomIndices[numSelected] = randomIndex; // Store the random index in randomIndices
             orderLedBlink[numSelected] = ledPins[randomIndex]; // Store the LED pin number in orderLedBlink
             numSelected++;
         }
@@ -146,22 +155,19 @@ void selectRandomLedToBlink() {
         delay(500); 
     }
 
-    // Print the order of LED blinking
-    for (int i = 0; i < 4; i++) {
-        Serial.print(orderLedBlink[i]);
-    }
-
-    // Start counting buttons after LED blinking
+    // Flag to start counting buttons after the random LED blinking
     countingButtons = true;
 
-    // Clean nextButtonOrder array
+    // Clean nextButtonOrder array before storing the next 4 button orders
     for (int i = 0; i < 4; i++) {
         nextButtonOrder[i] = 0;
     }
 }
 
 /*
-    Store the order of the next 4 buttons pressed based on their pin numbers
+    In storeNextButtonOrder function:
+    - Store the next 4 button pins pressed after pressing the start button.
+    - Call the function to check if the condition to win is met.
 */
 
 void storeNextButtonOrder(int buttonPin) { // Change the parameter to button pin number
@@ -178,17 +184,51 @@ void storeNextButtonOrder(int buttonPin) { // Change the parameter to button pin
     if (!alreadyStored) {
         nextButtonOrder[nextButtonIndex++] = buttonPin; // Store button pin number instead of index
         if (nextButtonIndex == 4) {
-            // Print the order of the next 4 buttons pressed
-            Serial.print("Next 4 Button Order: ");
-            for (int i = 0; i < 4; i++) {
-                Serial.print(nextButtonOrder[i]);
-                if (i < 3) {
-                    Serial.print(", ");
-                }
-            }
-            Serial.println();
             countingButtons = false; // Stop counting after storing the next 4 button orders
             nextButtonIndex = 0; // Reset the next button order index
+        	finalResult();
         }
     }
+  
 }
+
+/*	
+	Condition to win: Led,Button: {4,5}, {6,7}, {8,9}, {10,11}
+    Logic to win LedPin[i] = ButtonPin[i] + 1
+*/
+
+void finalResult() {
+    bool passed = false;
+  	int cont = 0;
+
+    // Check if the next button order is correct based on the logic
+    for (int i = 0;i < numButtons; i++){
+  	    if(nextButtonOrder[i] == (orderLedBlink[i] + 1)){
+     	    cont = cont+1;
+        } 
+   	
+    }
+
+    // Check if the condition to win is met
+    if(cont == numButtons){
+    	passed = true;
+    } else {
+     	passed = false;
+    }
+
+    // Call the function to blink the LEDs based on the condition to win
+    if (passed) {
+      	sequentialLeds();
+    } else {
+        turnOnAllLeds();
+    	delay(1000);
+    	turnOffAllLeds();
+    }
+}
+
+
+
+
+
+
+
