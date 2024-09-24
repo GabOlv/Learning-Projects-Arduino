@@ -21,15 +21,15 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 WebServer server(80);
 
 // Configurações do Wi-Fi
-const char* ssid = "SSID";
-const char* password = "PASSWORD";
+const char* ssid = "Rede_1";
+const char* password = "password123";
 const char* ap_ssid = "ESP32_Hotspot";
 const char* ap_password = "123456789";
 
 // Configurações do Firebase
 #define API_KEY "API_KEY"
 #define DATABASE_URL "DATABASE_URL"
-String databasePath = "/Temperatura"; // Ajuste conforme necessário
+String databasePath = "/Temperatura"; // Coleção do firebase
 
 // Variáveis de controle
 unsigned long elapsedMillis = 0;
@@ -38,8 +38,10 @@ unsigned long lastLedUpdate = 0;
 const unsigned long ledUpdateInterval = 500;  // Intervalo para LEDs e LCD
 unsigned long lastDataSend = 0;
 
+bool conectadoInternet = false;  // Variável para indicar status de conexão
+
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
     pinMode(LED_BRANCO, OUTPUT);
     pinMode(LED_VERDE, OUTPUT);
     pinMode(LED_AMARELO, OUTPUT);
@@ -58,24 +60,41 @@ void setup() {
     Serial.print("Hotspot iniciado. IP: ");
     Serial.println(WiFi.softAPIP());
 
-    // Conectar à rede Wi-Fi
+    // Tentar conectar à rede Wi-Fi com um limite de 3 tentativas
     WiFi.begin(ssid, password);
     Serial.print("Conectando ao Wi-Fi...");
-    
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print("not connected");
-    }
-    
-    Serial.println("\nConectado à rede Wi-Fi!");
-    Serial.print("IP da rede: ");
-    Serial.println(WiFi.localIP());
 
-    // Exibir o IP do Hotspot no LCD
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("IP: ");
-    lcd.print(WiFi.softAPIP());
+    int tentativas = 0;
+    while (WiFi.status() != WL_CONNECTED && tentativas < 3) {
+        delay(3000);  // Aguardar 3 segundos por tentativa
+        Serial.println("Tentando conectar...");
+        tentativas++;
+    }
+
+    // Verifica se a conexão foi bem-sucedida
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\nConectado à rede Wi-Fi!");
+        Serial.print("IP da rede: ");
+        Serial.println(WiFi.localIP());
+        conectadoInternet = true;
+
+        // Exibir o IP do Hotspot no LCD
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("IP: ");
+        lcd.print(WiFi.softAPIP());
+    } else {
+        // Não conseguiu conectar à internet após 3 tentativas
+        Serial.println("\nNão foi possível conectar à rede Wi-Fi.");
+        conectadoInternet = false;
+
+        // Exibir o IP do Hotspot no LCD com um " - X"
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("IP: ");
+        lcd.print(WiFi.softAPIP());
+        lcd.print(" X"); // Adiciona "X" para indicar falha de internet
+    }
 
     // Configurar servidor Web
     server.on("/api/temperatura", HTTP_GET, handleGetTemperature);
@@ -100,10 +119,13 @@ void loop() {
             lcd.setCursor(0, 0);
             lcd.print("IP: ");
             lcd.print(WiFi.softAPIP());
+            if (!conectadoInternet) {
+                lcd.print(" X");  // Exibe " - X" se não houver internet
+            }
             lcd.setCursor(0, 1);
             lcd.print("Temp: ");
             lcd.print(temperatura);
-            lcd.print(" C   ");
+            lcd.print(" C");
 
             // Controle dos LEDs individualmente
             if (temperatura <= 34) {
@@ -129,14 +151,6 @@ void loop() {
     if (currentMillis - lastDataSend >= update_interval) {
         lastDataSend = currentMillis;
         database_test(); // Função para enviar os dados
-
-        // Piscar o LED branco ao enviar dados
-        for (int i = 0; i < 5; i++) {
-            digitalWrite(LED_BRANCO, HIGH);
-            delay(100);
-            digitalWrite(LED_BRANCO, LOW);
-            delay(100);
-        }
     }
 }
 
@@ -162,6 +176,12 @@ void handleGetTemperature() {
 }
 
 void handleGetTemperatureBD() {
+    if (!conectadoInternet) {
+        // Retornar erro se não houver conexão com a internet
+        server.send(500, "application/json", "{\"error\":\"Sem conexão com a internet\"}");
+        return;
+    }
+
     HTTPClient http;
     String url = DATABASE_URL + databasePath + ".json?auth=" + API_KEY;
 
@@ -198,6 +218,11 @@ void database_test() {
                        ", \"data_hora\":\"" + dateTime + 
                        "\", \"alerta_temperatura\":" + String(alerta_temperatura) + "}";
 
+        if (!conectadoInternet) {
+            Serial.println("Sem conexão com a internet. Dados não enviados.");
+            return;
+        }
+
         HTTPClient http;
         String url = DATABASE_URL + databasePath + ".json?auth=" + API_KEY;
         http.begin(url);
@@ -208,19 +233,32 @@ void database_test() {
             Serial.println("Dados enviados com sucesso!");
             Serial.print("Temperatura: ");
             Serial.print(temperatura);
-            Serial.print(", Data/Hora: ");
+            Serial.print(" C, Data/Hora: ");
             Serial.println(dateTime);
-            Serial.print(", Alerta: ");
-            Serial.println(alerta_temperatura ? "VERDADEIRO" : "FALSO");
+
+            // Piscar o LED branco ao enviar dados com sucesso
+            for (int i = 0; i < 5; i++) {
+                digitalWrite(LED_BRANCO, HIGH);
+                delay(100);
+                digitalWrite(LED_BRANCO, LOW);
+                delay(100);
+            }
         } else {
-            Serial.println("Falha ao enviar dados: " + String(http.errorToString(httpCode).c_str()));
+            Serial.print("Erro ao enviar dados: ");
+            Serial.println(http.errorToString(httpCode));
         }
 
         http.end();
+    } else {
+        Serial.println("Erro ao ler o sensor DHT22.");
     }
 }
 
 void handleRoot() {
+    bool internetStatus = (WiFi.status() == WL_CONNECTED);  // Verifica se está conectado ao Wi-Fi
+    String statusText = internetStatus ? "Online" : "Offline";  // Texto de status
+    String statusColor = internetStatus ? "green" : "red";  // Cor da bolinha
+
     String html = R"rawliteral(
     <!DOCTYPE html>
     <html lang="pt-br">
@@ -265,6 +303,22 @@ void handleRoot() {
             .status span {
                 font-weight: bold;
             }
+            .connection-status {
+                margin-top: 10px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .connection-status div {
+                width: 15px;
+                height: 15px;
+                border-radius: 50%;
+                background-color: )rawliteral" + statusColor + R"rawliteral(;
+                margin-right: 10px;
+            }
+            .connection-status span {
+                font-size: 16px;
+            }
         </style>
     </head>
     <body>
@@ -273,6 +327,10 @@ void handleRoot() {
             <canvas id="temperatureChart"></canvas>
             <div class="status">
                 Temperatura Atual: <span id="currentTemperature">--</span> °C
+            </div>
+            <div class="connection-status">
+                <div></div>
+                <span>)rawliteral" + statusText + R"rawliteral(</span>
             </div>
         </div>
 
@@ -336,6 +394,6 @@ void handleRoot() {
     </body>
     </html>
     )rawliteral";
-  
+
     server.send(200, "text/html", html);
 }
